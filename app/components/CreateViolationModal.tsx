@@ -2,23 +2,31 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
+import * as Location from 'expo-location';
+import React, { useEffect, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../contexts/UserContext';
 import { apiService } from '../services/apiService';
 
+interface StageData {
+  number: string;
+  description: string;
+  id?: number; // Добавляем опциональный ID этапа
+}
+
 interface CreateViolationModalProps {
   visible: boolean;
   onClose: () => void;
   onCreate: (violationData: any) => void;
-  stages: { number: string; description: string }[];
+  stages: StageData[];
   siteId: number;
   geoData?: {
     latitude: number;
     longitude: number;
     accuracy?: number;
   };
+  activeJobs?: any[]; // Добавляем активные работы для получения ID
 }
 
 interface AttachedFile {
@@ -33,14 +41,15 @@ const CreateViolationModal: React.FC<CreateViolationModalProps> = ({
   onCreate,
   stages,
   siteId,
-  geoData
+  geoData,
+  activeJobs
 }) => {
   const { getThemeColor, userRole } = useUser();
   const { user, token } = useAuth();
   const themeColor = getThemeColor();
 
   // Автоматически определяем тип на основе роли пользователя
-  const isViolation = userRole === 'ИКО'; // ИКО - нарушения, ОСК - замечания
+  const isViolation = userRole === 'ИКО'; // ИКО - нарушения, ССК - замечания
   const modalTitle = isViolation ? 'Создание нарушения' : 'Создание замечания';
   const typeLabel = isViolation ? 'нарушение' : 'замечание';
 
@@ -56,10 +65,34 @@ const CreateViolationModal: React.FC<CreateViolationModalProps> = ({
   const [presenceOf, setPresenceOf] = useState('');
   const [selectedStage, setSelectedStage] = useState('');
   const [loading, setLoading] = useState(false);
-  
+  const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
+
   // Состояния для выпадающих списков
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showStageDropdown, setShowStageDropdown] = useState(false);
+
+  // Получаем геолокацию пользователя при открытии модального окна
+  useEffect(() => {
+    if (visible) {
+      (async () => {
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') {
+            console.log('Permission to access location was denied');
+            return;
+          }
+
+          const location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          setUserLocation(location);
+          console.log('User location obtained:', location.coords);
+        } catch (error) {
+          console.error('Error getting user location:', error);
+        }
+      })();
+    }
+  }, [visible]);
 
   // Списки опций
   const categories = [
@@ -156,30 +189,71 @@ const CreateViolationModal: React.FC<CreateViolationModalProps> = ({
     try {
       setLoading(true);
 
-      // ВАЖНО: Исправляем координаты - убедимся, что latitude и longitude не перепутаны
-      const correctedGeoData = {
+      // Используем геолокацию пользователя, если она доступна
+      const userGeoData = userLocation ? {
+        accuracy: userLocation.coords.accuracy || 0,
+        latitude: userLocation.coords.latitude,
+        longitude: userLocation.coords.longitude,
+      } : {
         accuracy: geoData?.accuracy || 0,
-        latitude: geoData?.longitude || 0,  // ШИРОТА
-        longitude: geoData?.latitude || 0,// ДОЛГОТА
+        latitude: geoData?.latitude || 0,
+        longitude: geoData?.longitude || 0,
       };
 
       console.log('Geo Data:', {
-        original: geoData,
-        corrected: correctedGeoData
+        userLocation: userLocation?.coords,
+        objectGeoData: geoData,
+        finalGeoData: userGeoData
       });
+
+      // Извлекаем job_id из выбранного этапа (если есть)
+      let jobId = 0;
+      if (selectedStage && activeJobs && activeJobs.length > 0) {
+        // Пытаемся найти соответствующий job по названию
+        const stageName = selectedStage.split(' - ')[1] || selectedStage;
+        const matchingJob = activeJobs.find(job => {
+          // Сравниваем по имени работы
+          if (job.name && job.name === stageName) return true;
+
+          // Также проверяем по полному совпадению строки
+          const jobFullName = `${job.stage_seq || job.seq || ''}.${job.seq || ''} - ${job.name}`;
+          if (jobFullName === selectedStage) return true;
+
+          return false;
+        });
+
+        // ВАЖНО: Используем только job.id, а не seq
+        if (matchingJob && matchingJob.id) {
+          jobId = matchingJob.id;
+        }
+
+        console.log('Selected stage:', selectedStage, 'Matched job:', matchingJob, 'Extracted job_id:', jobId);
+      }
 
       // Формируем данные для API
       const violationData = {
         user_id: user?.id || 0,
         site_id: siteId,
-        comment: description,
+        comment: description.trim(),
         fix_time: formatDeadlineToISO(deadline),
-        docs: attachedFiles.map(file => file.name).join(', '),
-        geo: correctedGeoData,
+        docs: attachedFiles.length > 0 ? attachedFiles.map(file => file.name).join(', ') : "",
+        file_ids: [], // TODO: Нужно будет загружать файлы на сервер и получать их ID
+        geo: userGeoData,
         stop_type: requiresStop ? 1 : 0,
         comm_type: isViolation ? 1 : 0, // 0 - замечание, 1 - нарушение
-        witness: presenceOf
-      };//job_id: 0
+        witness: presenceOf.trim() || "",
+        job_id: jobId
+      };
+
+      // Валидация перед отправкой
+      console.log('Validation check:', {
+        hasDescription: !!description.trim(),
+        hasToken: !!token,
+        hasUserId: !!user?.id,
+        siteId,
+        jobId,
+        hasGeo: !!userGeoData.latitude && !!userGeoData.longitude
+      });
 
       console.log('Sending violation data to API:', violationData);
 

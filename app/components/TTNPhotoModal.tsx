@@ -1,6 +1,7 @@
 // app/components/TTNPhotoModal.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImageManipulator from 'expo-image-manipulator';
 import React, { useRef, useState } from 'react';
 import { Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useUser } from '../contexts/UserContext';
@@ -22,12 +23,32 @@ const TTNPhotoModal: React.FC<TTNPhotoModalProps> = ({ visible, onClose, onPhoto
   const takePicture = async () => {
     if (cameraRef.current) {
       try {
-        const photo = await cameraRef.current.takePictureAsync();
+        console.log('=== Taking picture ===');
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.8, // Уменьшаем качество до 80%
+        });
+
         if (photo) {
-          setPhoto(photo.uri);
+          console.log('Photo taken, size:', photo.uri);
+
+          // Сжимаем и изменяем размер изображения
+          console.log('Compressing image...');
+          const manipulatedImage = await ImageManipulator.manipulateAsync(photo.uri, [
+            { resize: { width: 1600 } }, // Уменьшаем ширину до 1600px (пропорции сохраняются)
+          ], {
+            compress: 0.7, // Дополнительное сжатие 70%
+            format: ImageManipulator.SaveFormat.JPEG
+          });
+
+          console.log('Image compressed successfully');
+          console.log('Original URI:', photo.uri);
+          console.log('Compressed URI:', manipulatedImage.uri);
+          console.log('New dimensions:', manipulatedImage.width, 'x', manipulatedImage.height);
+
+          setPhoto(manipulatedImage.uri);
         }
       } catch (error) {
-        console.error('Error taking picture:', error);
+        console.error('Error taking/compressing picture:', error);
       }
     }
   };
@@ -49,10 +70,14 @@ const TTNPhotoModal: React.FC<TTNPhotoModalProps> = ({ visible, onClose, onPhoto
   if (!permission.granted) {
     return (
       <Modal visible={visible} animationType="slide">
-        <View style={styles.container}>
+        <View style={styles.permissionContainer}>
+          <Ionicons name="camera-outline" size={64} color="#FFFFFF" style={{ marginBottom: 24 }} />
           <Text style={styles.message}>Нужен доступ к камере для съемки ТТН</Text>
           <TouchableOpacity style={[styles.button, { backgroundColor: themeColor }]} onPress={requestPermission}>
             <Text style={styles.buttonText}>Предоставить доступ</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+            <Text style={styles.cancelButtonText}>Отмена</Text>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -72,10 +97,11 @@ const TTNPhotoModal: React.FC<TTNPhotoModalProps> = ({ visible, onClose, onPhoto
               <View style={styles.placeholder} />
             </View>
             
-            <CameraView 
-              style={styles.camera} 
+            <CameraView
+              style={styles.camera}
               facing={facing}
               ref={cameraRef}
+              zoom={0}
             >
               <View style={styles.cameraOverlay}>
                 <Text style={styles.overlayText}>
@@ -144,6 +170,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  permissionContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -164,21 +197,33 @@ const styles = StyleSheet.create({
     width: 24,
   },
   message: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#FFFFFF',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 32,
+    lineHeight: 26,
   },
   button: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
+    width: '100%',
   },
   buttonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  cancelButton: {
+    paddingVertical: 14,
+    marginTop: 12,
+  },
+  cancelButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '400',
+    opacity: 0.7,
   },
   camera: {
     flex: 1,

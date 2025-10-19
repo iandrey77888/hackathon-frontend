@@ -1,4 +1,5 @@
 // app/components/ViolationNoteCard.tsx (обновленная)
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useUser } from '../contexts/UserContext';
@@ -13,15 +14,52 @@ const ViolationNoteCard: React.FC<ViolationNoteCardProps> = ({ violation, onAcce
   const { getThemeColor } = useUser();
   const themeColor = getThemeColor();
 
+  // Определяем, является ли это остановочным нарушением или остановочным замечанием
+  const isStopViolation = violation.requiresStop;
+
+  // Проверяем статус исправления
+  const isAccepted = violation.state === 1; // Принято
+  const hasPendingFix = violation.hasPendingFix && violation.state !== 1; // Отправлено на проверку
+
   return (
     <View style={[
       styles.card,
-      violation.requiresStop && styles.stopViolationCard // Изменяем условие на requiresStop
+      isStopViolation && styles.stopViolationCard,
+      isAccepted && styles.acceptedCard // Зеленый фон для принятых
     ]}>
-      <Text style={styles.title}>
+      {/* Зеленый алерт для принятых нарушений/замечаний */}
+      {isAccepted && (
+        <View style={styles.acceptedBanner}>
+          <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+          <Text style={styles.acceptedBannerText}>Исправление принято</Text>
+        </View>
+      )}
+
+      {/* Желтый алерт для нарушений с непросмотренным исправлением */}
+      {hasPendingFix && (
+        <View style={styles.pendingBanner}>
+          <Ionicons name="time-outline" size={16} color="#FF9800" />
+          <Text style={styles.pendingBannerText}>Отправлено на проверку</Text>
+        </View>
+      )}
+
+      {/* Заголовок */}
+      <Text style={[
+        styles.headerTitle,
+        isStopViolation && styles.headerTitleDanger
+      ]}>
         {violation.isViolation ? 'Нарушение' : 'Замечание'}
       </Text>
-      
+
+      {/* Описание нарушения/замечания */}
+      <Text style={[
+        styles.descriptionText,
+        isStopViolation && styles.descriptionTextDanger
+      ]}>
+        {violation.comment}
+      </Text>
+
+      {/* Три колонки: Категория, Вид, Тип */}
       <View style={styles.typeRow}>
         <View style={styles.typeColumn}>
           <Text style={styles.typeLabel}>Категория</Text>
@@ -37,57 +75,74 @@ const ViolationNoteCard: React.FC<ViolationNoteCardProps> = ({ violation, onAcce
         </View>
       </View>
 
+      {/* Срок устранения */}
       <View style={styles.deadlineContainer}>
-        <Text style={styles.deadlineLabel}>Срок устранения</Text>
-        <Text style={styles.deadlineValue}>{violation.deadline}</Text>
+        <Text style={styles.sectionLabel}>Срок устранения</Text>
+        <Text style={[
+          styles.deadlineValue,
+          isStopViolation && styles.deadlineValueDanger
+        ]}>
+          {violation.deadline}
+        </Text>
       </View>
 
-      <View style={styles.commentContainer}>
-        <Text style={styles.commentLabel}>Примечание</Text>
-        <Text style={styles.commentValue}>{violation.comment}</Text>
+      {/* Примечание (приложенные файлы) */}
+      <View style={styles.attachmentContainer}>
+        <Text style={styles.sectionLabel}>Примечание (приложенные файлы)</Text>
+        <TouchableOpacity style={styles.attachmentLink}>
+          <Text style={styles.attachmentLinkText}>Фото №1.jpg</Text>
+          <Ionicons name="open-outline" size={16} color="#6B79ED" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.divider} />
 
+      {/* Дата и Остановочное */}
       <View style={styles.dateStopRow}>
-        <View style={styles.dateColumn}>
-          <Text style={styles.dateLabel}>Дата</Text>
-          <Text style={styles.dateValue}>{violation.dateRecorded}</Text>
+        <View style={styles.infoColumn}>
+          <Text style={styles.infoLabel}>Дата</Text>
+          <Text style={styles.infoValue}>{violation.dateRecorded}</Text>
         </View>
-        <View style={styles.stopColumn}>
-          <Text style={styles.stopLabel}>Остановочное</Text>
+        <View style={styles.infoColumnRight}>
+          <Text style={styles.infoLabel}>Остановочное</Text>
           <Text style={[
-            styles.stopValue,
-            violation.requiresStop && styles.stopValueHighlight // Выделяем красным если остановочное
+            styles.infoValue,
+            isStopViolation && styles.infoValueDanger
           ]}>
             {violation.requiresStop ? 'Да' : 'Нет'}
           </Text>
         </View>
       </View>
 
+      {/* Выдано и В присутствии */}
       <View style={styles.issuedPresenceRow}>
-        <View style={styles.issuedColumn}>
-          <Text style={styles.issuedLabel}>Выдано</Text>
-          <Text style={styles.issuedValue}>{violation.issuedBy}</Text>
+        <View style={styles.infoColumn}>
+          <Text style={styles.infoLabel}>Выдано</Text>
+          <Text style={styles.infoValue}>{violation.issuedBy}</Text>
         </View>
-        <View style={styles.presenceColumn}>
-          <Text style={styles.presenceLabel}>В присутствии</Text>
-          <Text style={styles.presenceValue}>{violation.presenceOf}</Text>
+        <View style={styles.infoColumnRight}>
+          <Text style={styles.infoLabel}>В присутствии</Text>
+          <Text style={styles.infoValue}>{violation.presenceOf}</Text>
         </View>
       </View>
 
+      {/* Этап работ */}
       <View style={styles.stageContainer}>
-        <Text style={styles.stageLabel}>Этап работ</Text>
-        <Text style={styles.stageValue}>
-          {violation.stage.number}. {violation.stage.description}
-        </Text>
+        <Text style={styles.sectionLabel}>Этап работ</Text>
+        <View style={styles.stageValueContainer}>
+          <View style={[styles.stageCircle, { backgroundColor: themeColor }]}>
+            <Text style={styles.stageNumber}>{violation.stage.number}</Text>
+          </View>
+          <Text style={styles.stageDescription}>{violation.stage.description}</Text>
+        </View>
       </View>
 
-      <TouchableOpacity 
-        style={[styles.acceptButton, { backgroundColor: themeColor }]}
+      {/* Кнопка "Подробнее" */}
+      <TouchableOpacity
+        style={[styles.detailsButton, { backgroundColor: themeColor }]}
         onPress={() => onAccept(violation.id)}
       >
-        <Text style={styles.acceptButtonText}>Принять исправление</Text>
+        <Text style={styles.detailsButtonText}>Подробнее</Text>
       </TouchableOpacity>
     </View>
   );
@@ -96,162 +151,217 @@ const ViolationNoteCard: React.FC<ViolationNoteCardProps> = ({ violation, onAcce
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 16,
-    boxShadow: '0px 2px 4px rgba(0,0,0,0.1)',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 3,
   },
   stopViolationCard: {
     backgroundColor: '#FFEBEE',
-    borderLeftWidth: 4,
-    borderLeftColor: '#F44336',
   },
-  title: {
+  acceptedCard: {
+    backgroundColor: '#E8F5E9', // Зеленый фон для принятых
+  },
+  acceptedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#C8E6C9',
+    marginHorizontal: -20,
+    marginTop: -20,
+    marginBottom: 16,
+    padding: 10,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#4CAF50',
+  },
+  acceptedBannerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2E7D32',
+    marginLeft: 6,
+  },
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFE0B2',
+    marginHorizontal: -20,
+    marginTop: -20,
+    marginBottom: 16,
+    padding: 10,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FF9800',
+  },
+  pendingBannerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#E65100',
+    marginLeft: 6,
+  },
+  fixedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: -20,
+    marginTop: -20,
+    marginBottom: 16,
+    padding: 10,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  fixedBannerText: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#4CAF50',
+    marginLeft: 6,
+  },
+  headerTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#424242',
+    fontWeight: '700',
+    color: '#1A1A1A',
     marginBottom: 12,
+  },
+  headerTitleDanger: {
+    color: '#D32F2F',
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: '#424242',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  descriptionTextDanger: {
+    color: '#D32F2F',
   },
   typeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   typeColumn: {
     flex: 1,
-    marginHorizontal: 4,
   },
   typeLabel: {
-    fontSize: 12,
-    color: '#757575',
+    fontSize: 14,
+    color: '#1A1A1A',
+    fontWeight: '600',
     marginBottom: 4,
   },
   typeValue: {
     fontSize: 14,
-    color: '#424242',
-    fontWeight: '500',
+    color: '#757575',
   },
   deadlineContainer: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  deadlineLabel: {
-    fontSize: 12,
-    color: '#757575',
+  sectionLabel: {
+    fontSize: 14,
+    color: '#1A1A1A',
+    fontWeight: '600',
     marginBottom: 4,
   },
   deadlineValue: {
     fontSize: 14,
-    color: '#424242',
-    fontWeight: '500',
-  },
-  commentContainer: {
-    marginBottom: 12,
-  },
-  commentLabel: {
-    fontSize: 12,
     color: '#757575',
-    marginBottom: 4,
   },
-  commentValue: {
+  deadlineValueDanger: {
+    color: '#D32F2F',
+    fontWeight: '600',
+  },
+  attachmentContainer: {
+    marginBottom: 16,
+  },
+  attachmentLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  attachmentLinkText: {
     fontSize: 14,
-    color: '#424242',
+    color: '#6B79ED',
+    marginRight: 4,
+    textDecorationLine: 'underline',
   },
   divider: {
     height: 1,
     backgroundColor: '#E0E0E0',
-    marginVertical: 12,
+    marginVertical: 16,
   },
   dateStopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  dateColumn: {
+  infoColumn: {
     flex: 1,
   },
-  dateLabel: {
-    fontSize: 12,
-    color: '#757575',
-    marginBottom: 4,
-  },
-  dateValue: {
-    fontSize: 14,
-    color: '#424242',
-    fontWeight: '500',
-  },
-  stopColumn: {
+  infoColumnRight: {
     flex: 1,
     alignItems: 'flex-end',
   },
-  stopLabel: {
-    fontSize: 12,
-    color: '#757575',
+  infoLabel: {
+    fontSize: 14,
+    color: '#1A1A1A',
+    fontWeight: '600',
     marginBottom: 4,
   },
-  stopValue: {
+  infoValue: {
     fontSize: 14,
-    color: '#424242',
-    fontWeight: '500',
+    color: '#757575',
   },
-  stopValueHighlight: {
-    color: '#F44336',
-    fontWeight: 'bold',
+  infoValueDanger: {
+    color: '#D32F2F',
+    fontWeight: '600',
   },
   issuedPresenceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  issuedColumn: {
-    flex: 1,
-  },
-  issuedLabel: {
-    fontSize: 12,
-    color: '#757575',
-    marginBottom: 4,
-  },
-  issuedValue: {
-    fontSize: 14,
-    color: '#424242',
-    fontWeight: '500',
-  },
-  presenceColumn: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  presenceLabel: {
-    fontSize: 12,
-    color: '#757575',
-    marginBottom: 4,
-  },
-  presenceValue: {
-    fontSize: 14,
-    color: '#424242',
-    fontWeight: '500',
+    marginBottom: 16,
   },
   stageContainer: {
     marginBottom: 16,
   },
-  stageLabel: {
-    fontSize: 12,
-    color: '#757575',
-    marginBottom: 4,
-  },
-  stageValue: {
-    fontSize: 14,
-    color: '#424242',
-    fontWeight: '500',
-  },
-  acceptButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 20,
+  stageValueContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  acceptButtonText: {
+  stageCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  stageNumber: {
+    fontSize: 14,
     color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 16,
+    fontWeight: '700',
+  },
+  stageDescription: {
+    flex: 1,
+    fontSize: 14,
+    color: '#424242',
+    lineHeight: 20,
+  },
+  detailsButton: {
+    paddingVertical: 14,
+    borderRadius: 24,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  detailsButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 15,
   },
 });
 

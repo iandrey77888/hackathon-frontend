@@ -1,14 +1,14 @@
 // app/screens/HomeScreen.tsx (обновленный с токеном)
+import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Header from '../components/Header';
-import MobileMapComponent from '../components/MobileMapComponent';
+import MapComponent from '../components/MapComponent';
 import ObjectCard from '../components/ObjectCard';
 import { useAuth } from '../contexts/AuthContext';
 import { ApiObjectData, apiService } from '../services/apiService';
 import { ObjectData, ObjectDetails, WarehouseMaterial } from '../types';
 import ObjectDetailsScreen from './ObjectDetailsScreen';
-import * as Location from 'expo-location';
 
 interface HomeScreenProps {
 
@@ -49,6 +49,7 @@ const gdPolygon = [[
 ]
 ]
 
+
 const mockWarehouseMaterials: WarehouseMaterial[] = [
   {
     id: '1',
@@ -88,19 +89,125 @@ const HomeScreen: React.FC<HomeScreenProps> = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    async function getCurrentLocation() {
-      
+    let locationSubscription: Location.LocationSubscription | null = null;
+    let webWatchId: number | null = null;
+
+    async function startLocationTracking() {
+      // Для веб-версии используем нативный Geolocation API
+      if (Platform.OS === 'web') {
+        console.log('Using web geolocation API');
+
+        if (!navigator.geolocation) {
+          setErrorMsg('Geolocation is not supported by your browser');
+          return;
+        }
+
+        // Получаем текущую позицию
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const webLocation: Location.LocationObject = {
+              coords: {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                altitude: position.coords.altitude,
+                accuracy: position.coords.accuracy,
+                altitudeAccuracy: position.coords.altitudeAccuracy,
+                heading: position.coords.heading,
+                speed: position.coords.speed,
+              },
+              timestamp: position.timestamp,
+            };
+            setLocation(webLocation);
+            console.log('Web location updated:', webLocation.coords);
+          },
+          (error) => {
+            console.error('Error getting web location:', error);
+            setErrorMsg(`Geolocation error: ${error.message}`);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0,
+          }
+        );
+
+        // Следим за обновлениями местоположения
+        webWatchId = navigator.geolocation.watchPosition(
+          (position) => {
+            const webLocation: Location.LocationObject = {
+              coords: {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                altitude: position.coords.altitude,
+                accuracy: position.coords.accuracy,
+                altitudeAccuracy: position.coords.altitudeAccuracy,
+                heading: position.coords.heading,
+                speed: position.coords.speed,
+              },
+              timestamp: position.timestamp,
+            };
+            setLocation(webLocation);
+            console.log('Web location updated:', webLocation.coords);
+          },
+          (error) => {
+            console.error('Error watching web location:', error);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 5000,
+          }
+        );
+
+        return;
+      }
+
+      // Для нативных платформ используем expo-location
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setErrorMsg('Permission to access location was denied');
         return;
       }
 
-      let location = await Location.getCurrentPositionAsync({});
-      setLocation(location);
+      // Сначала получаем текущую позицию для быстрого отображения
+      try {
+        const currentLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        setLocation(currentLocation);
+      } catch (error) {
+        console.error('Error getting initial location:', error);
+      }
+
+      // Затем подписываемся на обновления местоположения
+      try {
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced, // Баланс между точностью и батареей
+            timeInterval: 5000, // Обновление каждые 5 секунд
+            distanceInterval: 10, // Или при перемещении на 10 метров
+          },
+          (newLocation) => {
+            setLocation(newLocation);
+            console.log('Location updated:', newLocation.coords);
+          }
+        );
+      } catch (error) {
+        console.error('Error watching location:', error);
+        setErrorMsg('Error tracking location');
+      }
     }
 
-    getCurrentLocation();
+    startLocationTracking();
+
+    // Очистка подписки при размонтировании компонента
+    return () => {
+      if (Platform.OS === 'web' && webWatchId !== null) {
+        navigator.geolocation.clearWatch(webWatchId);
+      } else if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -145,7 +252,8 @@ const fetchObjects = async () => {
       warnsCount: apiObject.warnsCount || 0,
       activeJobs: apiObject.activeJobs || [],
       latitude: apiObject.latitude || 0,
-      longitude: apiObject.longitude || 0
+      longitude: apiObject.longitude || 0,
+      coordinates: apiObject.coordinates
     }));
 
     function transformedCoordinates(objects: ApiObjectData[]){
@@ -236,14 +344,25 @@ const fetchObjects = async () => {
   return (
     <View style={styles.container}>
       <Header />
-      
+
+      {/* Уведомление о геолокации */}
+      {errorMsg && (
+        <View style={styles.locationWarning}>
+          <Text style={styles.locationWarningText}>⚠️ {errorMsg}</Text>
+        </View>
+      )}
+
       {/* Карта с маркерами объектов */}
       <View style={styles.mapContainer}>
-        {/*<MapComponent /> */}
-        { <MobileMapComponent points={coordinates} cameraCenter={[location?.coords.longitude || 0, location?.coords.latitude || 0]} userLocation={location ? [location?.coords.longitude || 0, location?.coords.latitude || 0] : undefined}
-          zoom={15} /> }
+
+        <MapComponent
+          points={coordinates}
+          cameraCenter={[location?.coords.longitude || 0, location?.coords.latitude || 0]}
+          userLocation={location ? [location?.coords.longitude || 0, location?.coords.latitude || 0] : undefined}
+          zoom={15}
+        />
       </View>
-      
+
       {/* Секция с доступными объектами */}
       <View style={styles.objectsSection}>
         <Text style={styles.sectionTitle}>Доступные объекты</Text>
@@ -258,6 +377,11 @@ const fetchObjects = async () => {
                 key={object.id}
                 {...object}
                 onPress={() => handleObjectPress(object)}
+                userLocation={location ? {
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                  accuracy: location.coords.accuracy || 0
+                } : null}
               />
             ))}
           </ScrollView>
@@ -268,6 +392,11 @@ const fetchObjects = async () => {
         visible={showDetails}
         onClose={handleCloseDetails}
         objectData={selectedObject}
+        userLocation={location ? {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          accuracy: location.coords.accuracy || 0
+        } : null}
       />
     </View>
   );
@@ -277,6 +406,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+  },
+  locationWarning: {
+    backgroundColor: '#FFF3CD',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+  },
+  locationWarningText: {
+    color: '#856404',
+    fontSize: 13,
+    fontWeight: '500',
   },
   mapContainer: {
     height: 200,

@@ -1,0 +1,36 @@
+version: '3.8'
+
+name: kontorskii-backend
+
+services:
+  db:
+    image: postgis/postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: DB_PWD
+      POSTGRES_USER: ecmkontorskii
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data 
+    ports:
+      - 5432:5432
+  map-server:
+    image: maptiler/tileserver-gl
+    restart: unless-stopped
+    volumes:
+      - /home/akruchinin/maptiles:/data
+    ports:
+      - 8080:8080
+    command: --no-cors
+  minio:
+    image:  quay.io/minio/minio
+    restart: unless-stopped
+    environment:
+      - MINIO_ROOT_USER=MINIO_USER
+      - MINIO_ROOT_PASSWORD=MINOPWD
+    volumes:
+      - ./miniodata:/data
+    ports:
+      - 9000:9000
+      - 9001:9001
+    command: server /data --console-address ":9001"
+    

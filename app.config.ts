@@ -1,15 +1,21 @@
-import { ExpoConfig, ConfigContext } from 'expo/config';
+import { ConfigContext, ExpoConfig } from 'expo/config';
+import { MAP_URL } from './app/contexts/GlobalContext';
 
 const getEnvConfig = () => {
   if (process.env.MY_ENVIRONMENT === 'akruchinin') {
     return {
+      MAP_URL: 'https://192.168.88.193:8080',
+      BACK_URL: 'https://192.168.88.193:8002'
+    };
+  } else if (process.env.MY_ENVIRONMENT === 'deploy') {
+    return {
       MAP_URL: 'http://192.168.88.193:8080',
-      BACK_URL: 'http://192.168.88.193:8002'
+      BACK_URL: 'http://192.168.88.193:8100/api'
     };
   } else {
     return {
-      MAP_URL: 'http://genshinlohs.ru:8080',
-      BACK_URL: 'http://genshinlohs.ru:8002'
+      MAP_URL: 'https://genshinlohs.ru:8080',
+      BACK_URL: 'https://genshinlohs.ru:8002'
     }
   }
 };

@@ -2,7 +2,7 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { useAuth, User } from './AuthContext';
 
-export type UserRole = 'ОСК' | 'Подрядчик' | 'ИКО';
+export type UserRole = 'ССК' | 'Подрядчик' | 'ИКО';
 
 interface UserContextType {
   user: User | null;
@@ -19,13 +19,13 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 const getRoleFromNumber = (roleNumber: number): UserRole => {
   switch (roleNumber) {
     case 0:
-      return 'ОСК';
+      return 'ССК';
     case 1:
       return 'Подрядчик';
     case 2:
       return 'ИКО';
     default:
-      return 'ОСК';
+      return 'ССК';
   }
 };
 
@@ -33,19 +33,19 @@ const getRoleFromNumber = (roleNumber: number): UserRole => {
 const getRoleDisplayName = (roleNumber: number): string => {
   switch (roleNumber) {
     case 0:
-      return 'ОСК';
+      return 'ССК';
     case 1:
       return 'Подрядчик';
     case 2:
       return 'ИКО';
     default:
-      return 'ОСК';
+      return 'ССК';
   }
 };
 
 export const UserProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const { user: authUser } = useAuth();
-  const [userRole, setUserRole] = useState<UserRole>('ОСК');
+  const [userRole, setUserRole] = useState<UserRole>('ССК');
 
   // При изменении пользователя из аутентификации, обновляем роль
   useEffect(() => {
@@ -65,7 +65,7 @@ export const UserProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         return '#FF8533';
       case 'ИКО':
         return '#9B5EFD';
-      case 'ОСК':
+      case 'ССК':
       default:
         return '#6B79ED';
     }
